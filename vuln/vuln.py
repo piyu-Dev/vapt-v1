@@ -10,6 +10,22 @@ import base64
 from bs4 import BeautifulSoup
 from lxml import etree
 from safety import scan as safe
+from googlesearch import search
+def get_wayback_url(original_url):
+    wayback_api_url = f"http://archive.org/wayback/available?url={original_url}"
+
+    try:
+        response = requests.get(wayback_api_url)
+        response.raise_for_status()
+        data = response.json()
+
+        if 'closest' in data['archived_snapshots']:
+            return data['archived_snapshots']['closest']['url']
+        else:
+            return "Wayback Machine doesn't have a snapshot for this URL."
+
+    except requests.exceptions.RequestException as e:
+        return f"Error: {e}"
 
 class VulnerabilityScanner:
     def __init__(self, target_url):
@@ -148,10 +164,80 @@ class VulnerabilityScanner:
                 print("No detailed error messages detected")
         except requests.exceptions.RequestException as e:
             print(f"Error checking for insufficient logging and monitoring: {e}")
+            
+    def google_dork(self, query, num_results=10):
+            """
+        Perform Google dorking and print search results.
+
+        Args:
+        - query: The Google search query.
+        - num_results: Number of search results to retrieve (default is 10).
+            """
+            try:
+                
+                # Perform Google search using the query
+                search_results = search(query, num=num_results, stop=num_results)
+
+                # Print the search results
+                print(f"Google Dork Query: {query}")
+                print("Search Results:")
+                for i, result in enumerate(search_results, start=1):
+                    print(f"{i}. {result}")
+
+            except Exception as e:
+                print(f"An error occurred: {e}")
+
+    def perform_google_dork(self):
+        query = f"site:{self.target_url} filetype:pdf confidential"
+        num_results = 50
+        self.google_dork(query, num_results)
+    
+    def find_tech_stack(self, url):
+        try:
+            # Fetch the HTML content of the website
+            response = requests.get(url)
+            html_content = response.text
+            
+            # Define regular expressions to search for common technology stack indicators
+            tech_stack_patterns = {
+                'JavaScript': r'<script[^>]*src=["\']([^"\']+)["\'][^>]*></script>',
+                'CSS': r'<link[^>]*href=["\']([^"\']+)["\'][^>]*>',
+                'Frameworks': r'<(?:script|link)[^>]*(?:src|href)=["\'][^"\']*\/(angular|react|vue|django|laravel|rails)[^"\']*["\']',
+                'Server-side': r'(?:Node.js|Express|Flask|Django|Rails)',
+                'Database': r'(?:MySQL|PostgreSQL|MongoDB|SQLite)',
+                'Web Server': r'(?:Apache|Nginx)',
+                # Add more patterns as needed
+            }
+            
+            # Search for technology stack indicators in the HTML content
+            tech_stack_info = {}
+            for stack_type, pattern in tech_stack_patterns.items():
+                matches = re.findall(pattern, html_content, re.IGNORECASE)
+                if matches:
+                    tech_stack_info[stack_type] = matches
+
+            return tech_stack_info
+            
+        except Exception as e:
+            print(f"An error occurred: {e}")
+
+    def print_tech_stack(self, tech_stack):
+        if tech_stack:
+            print("Technology Stack:")
+            for stack_type, technologies in tech_stack.items():
+                print(f"{stack_type}:")
+                for tech in technologies:
+                    print(f"  - {tech}")
+        else:
+            print("No technology stack information found.")
 
 def main():
     target_url = input("Enter the target URL: ")
     scanner = VulnerabilityScanner(target_url)
+    tech_stack = scanner.find_tech_stack(target_url)
+    scanner.print_tech_stack(tech_stack)
+    wayback_url = get_wayback_url(target_url)
+    print("Wayback URL:", wayback_url)
 
     if scanner.check_injection():
         print("Potential injection vulnerability detected")
@@ -180,6 +266,9 @@ def main():
 
     if scanner.check_insufficient_logging_and_monitoring():
         print("Potential insufficient logging and monitoring detected")
+        
+    scanner.perform_google_dork()
+
 
 if __name__ == "__main__":
     main()
