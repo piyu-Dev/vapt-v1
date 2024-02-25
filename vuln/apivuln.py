@@ -48,8 +48,7 @@ def perform_api_vapt(api_endpoints):
 
 # Example usage
 api_endpoints = [
-    "https://api.example.com/endpoint1",
-    "https://api.example.com/endpoint2",
+    "http://10.10.142.34:8000/WebGoat/login"
     # Add more API endpoints to test
 ]
 
